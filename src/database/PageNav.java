@@ -19,42 +19,40 @@ import java.io.RandomAccessFile;
 import java.util.TreeSet;
 import java.util.Map.Entry;
 
-public class Builder {
+public class PageNav {
 
 	public static int PAGESIZE = 512;// page size
 
 	// variables
-	public byte numberOfColumns;
+	public byte noOfCols;
 	public byte[] dataType;
 	public String[] data;
 	public int pageNumber;
 	public short payLoadSize;
 	public int rowId;
-	public Builder payload;
+	public PageNav payload;
 	public short location;
 	public int pageNo;
 	public byte pageType;
-	public Map<Integer, Builder> records;
+	public Map<Integer, PageNav> tuples;
 
-	// getter setter for pay load
-	public Builder getPayload() {
+	public PageNav getPayload() {
 		return payload;
 	}
 
-	public void setPayload(Builder payload) {
+	public void setPayload(PageNav payload) {
 		this.payload = payload;
 	}
 	
-	// write to a page
-	public static void writePage(RandomAccessFile table, int parent, int newPage, int midKey) {
+	public static void writeToPage(RandomAccessFile table, int parent, int newPage, int midKey) {
 		try {
 			table.seek((parent - 1) * PAGESIZE + 1);
-			int numrecords = table.read();
-			int mid = (int) Math.ceil((double) numrecords / 2);
-			int numrecords1 = mid - 1;
-			int numrecords2 = numrecords - numrecords1;
+			int noRecs = table.read();
+			int mid = (int) Math.ceil((double) noRecs / 2);
+			int noRecs1 = mid - 1;
+			int noRecs2 = noRecs - noRecs1;
 			int size = PAGESIZE;
-			for (int i = numrecords1; i < numrecords; i++) {
+			for (int i = noRecs1; i < noRecs; i++) {
 				table.seek((parent - 1) * PAGESIZE + 8 + 2 * i);
 				short offset = table.readShort();
 				table.seek(offset);
@@ -64,37 +62,36 @@ public class Builder {
 				table.seek((newPage - 1) * PAGESIZE + size);
 				table.write(data);
 
-				table.seek((newPage - 1) * PAGESIZE + 8 + (i - numrecords1) * 2);
+				table.seek((newPage - 1) * PAGESIZE + 8 + (i - noRecs1) * 2);
 				table.writeShort(size);
 
 			}
 
 			table.seek((parent - 1) * PAGESIZE + 1);
-			table.write(numrecords1);
+			table.write(noRecs1);
 
 			table.seek((newPage - 1) * PAGESIZE + 1);
-			table.write(numrecords2);
+			table.write(noRecs2);
 
-			int int_parent = TreeFunctions.getParent(table, parent);
-			if (int_parent == 0) {
-				int newParent = createPage(table);
-				TreeFunctions.setParent(table, newParent, parent, midKey);
-				table.seek((newParent - 1) * PAGESIZE + 4);
+			int tree_parent = TreeFunctions.getParent(table, parent);
+			if (tree_parent == 0) {
+				int new_tree_parent = createPage(table);
+				TreeFunctions.setParent(table, new_tree_parent, parent, midKey);
+				table.seek((new_tree_parent - 1) * PAGESIZE + 4);
 				table.writeInt(newPage);
 			} else {
-				if (rightPointer(table, int_parent, parent)) {
-					TreeFunctions.setParent(table, int_parent, parent, midKey);
-					table.seek((int_parent - 1) * PAGESIZE + 4);
+				if (rightPointer(table, tree_parent, parent)) {
+					TreeFunctions.setParent(table, tree_parent, parent, midKey);
+					table.seek((tree_parent - 1) * PAGESIZE + 4);
 					table.writeInt(newPage);
 				} else
-					TreeFunctions.setParent(table, int_parent, newPage, midKey);
+					TreeFunctions.setParent(table, tree_parent, newPage, midKey);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	// check the right pointer
 	public static boolean rightPointer(RandomAccessFile table, int parent, int rightPointer) {
 
 		try {
@@ -107,13 +104,12 @@ public class Builder {
 		return false;
 	}
 
-	// check whether page can fit or not
 	public static boolean checkCapacity(RandomAccessFile table, int parent) {
 		try {
 			table.seek((parent - 1) * PAGESIZE + 1);
-			int numrecords = table.read();
+			int noRecs = table.read();
 			short Buildercontent = table.readShort();
-			int size = 8 + numrecords * 2 + Buildercontent;
+			int size = 8 + noRecs * 2 + Buildercontent;
 			size = PAGESIZE - size;
 			if (size >= 8)
 				return true;
@@ -124,21 +120,19 @@ public class Builder {
 		return false;
 	}
 
-	// new page creation
 	public static int createPage(RandomAccessFile table) {
-
-		int numpages = 0;
+		int noOfPages = 0;
 		try {
-			numpages = (int) (table.length() / PAGESIZE);
-			numpages++;
+			noOfPages = (int) (table.length() / PAGESIZE);
+			noOfPages++;
 			table.setLength(table.length() + PAGESIZE);
-			table.seek((numpages - 1) * PAGESIZE);
+			table.seek((noOfPages - 1) * PAGESIZE);
 			table.write(0x05);
 
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return numpages;
+		return noOfPages;
 	}
 
 	
@@ -164,16 +158,16 @@ public class Builder {
 	}
 
 
-	public static void payload(RandomAccessFile file, Builder Builder, int BuilderLocation) {
+	public static void payload(RandomAccessFile file, PageNav PageNav, int BuilderLocation) {
 
 		try {
 
 			file.seek(BuilderLocation);
-			file.writeShort(Builder.payLoadSize);
-			file.writeInt(Builder.rowId);
+			file.writeShort(PageNav.payLoadSize);
+			file.writeInt(PageNav.rowId);
 
-			Builder payload = Builder.getPayload();
-			file.writeByte(payload.numberOfColumns);
+			PageNav payload = PageNav.getPayload();
+			file.writeByte(payload.noOfCols);
 
 			byte[] dataTypes = payload.dataType;
 			file.write(dataTypes);
@@ -232,33 +226,33 @@ public class Builder {
 				}
 			}
 
-			file.seek((PAGESIZE * Builder.pageNumber) + 1);
-			int noOfBuilders = file.readByte();
+			file.seek((PAGESIZE * PageNav.pageNumber) + 1);
+			int noOfBlds = file.readByte();
 
-			file.seek((PAGESIZE * Builder.pageNumber) + 1);
-			file.writeByte((byte) (noOfBuilders + 1));
+			file.seek((PAGESIZE * PageNav.pageNumber) + 1);
+			file.writeByte((byte) (noOfBlds + 1));
 
-			Map<Integer, Short> updateMap = new TreeMap<Integer, Short>();
-			short[] BuilderLocations = new short[noOfBuilders];
-			int[] keys = new int[noOfBuilders];
+			Map<Integer, Short> updatePage = new TreeMap<Integer, Short>();
+			short[] BldLocn = new short[noOfBlds];
+			int[] keys = new int[noOfBlds];
 
-			for (int location = 0; location < noOfBuilders; location++) {
+			for (int location = 0; location < noOfBlds; location++) {
 
-				file.seek((PAGESIZE * Builder.pageNumber) + 8 + (location * 2));
-				BuilderLocations[location] = file.readShort();
-				file.seek(BuilderLocations[location] + 2);
+				file.seek((PAGESIZE * PageNav.pageNumber) + 8 + (location * 2));
+				BldLocn[location] = file.readShort();
+				file.seek(BldLocn[location] + 2);
 				keys[location] = file.readInt();
-				updateMap.put(keys[location], BuilderLocations[location]);
+				updatePage.put(keys[location], BldLocn[location]);
 			}
-			updateMap.put(Builder.rowId, (short) BuilderLocation);
+			updatePage.put(PageNav.rowId, (short) BuilderLocation);
 
-			file.seek((PAGESIZE * Builder.pageNumber) + 8);
-			for (Map.Entry<Integer, Short> entry : updateMap.entrySet()) {
+			file.seek((PAGESIZE * PageNav.pageNumber) + 8);
+			for (Map.Entry<Integer, Short> entry : updatePage.entrySet()) {
 				short offset = entry.getValue();
 				file.writeShort(offset);
 			}
 
-			file.seek((PAGESIZE * Builder.pageNumber) + 2);
+			file.seek((PAGESIZE * PageNav.pageNumber) + 2);
 			file.writeShort(BuilderLocation);
 			file.close();
 
@@ -267,21 +261,20 @@ public class Builder {
 		}
 	}
 
-	// builder creation
-	public static Builder BuilderForm(int pageNo, int primaryKey, short payLoadSize, byte[] dataType, String[] values) {
-		Builder Builder = new Builder();
-		Builder.pageNumber = pageNo;
-		Builder.rowId = primaryKey;
-		Builder.payLoadSize = payLoadSize;
+	public static PageNav AddPage(int pageNo, int primaryKey, short payLoadSize, byte[] dataType, String[] values) {
+		PageNav PageNav = new PageNav();
+		PageNav.pageNumber = pageNo;
+		PageNav.rowId = primaryKey;
+		PageNav.payLoadSize = payLoadSize;
 
-		Builder payload = new Builder();
-		payload.numberOfColumns = (Byte.parseByte(values.length - 1 + ""));
+		PageNav payload = new PageNav();
+		payload.noOfCols = (Byte.parseByte(values.length - 1 + ""));
 		payload.dataType = dataType;
 		payload.setData(values);
 
-		Builder.setPayload(payload);
+		PageNav.setPayload(payload);
 
-		return Builder;
+		return PageNav;
 	}
 
 	public static int getPayloadSize(String tableName, String[] values, byte[] plDataType, String[] dataType) {
@@ -355,7 +348,7 @@ public class Builder {
 			int noOfPages = (int) (table.length() / PAGESIZE);
 
 			Map<Integer, String> colNames = getColumnNames(tableName);
-			Map<Integer, Builder> records = new LinkedHashMap<Integer, Builder>();
+			Map<Integer, PageNav> records = new LinkedHashMap<Integer, PageNav>();
 			for (int i = 0; i < noOfPages; i++) {
 				table.seek(PAGESIZE * i);
 				byte pageType = table.readByte();
@@ -367,10 +360,10 @@ public class Builder {
 					for (int location = 0; location < noOfBuilders; location++) {
 						BuilderLocations[location] = table.readShort();
 					}
-					Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-					recordBuilders = getRecords(table, BuilderLocations, i);
+					Map<Integer, PageNav> recBlds = new LinkedHashMap<Integer, PageNav>();
+					recBlds = retreivePayload(table, BuilderLocations, i);
 
-					Set<Integer> rowIds = recordBuilders.keySet();
+					Set<Integer> rowIds = recBlds.keySet();
 
 					Set<Integer> sortedRowIds = new TreeSet<Integer>(rowIds);
 
@@ -401,7 +394,7 @@ public class Builder {
 		return -1;
 	}
 
-	public static Map<Integer, Builder> getData(String tableName, String[] columnNames, String[] condition) {
+	public static Map<Integer, PageNav> getData(String tableName, String[] columnNames, String[] condition) {
 		try {
 
 			tableName = tableName.trim();
@@ -412,16 +405,16 @@ public class Builder {
 			RandomAccessFile table = new RandomAccessFile(path, "rw");
 			int noOfPages = (int) (table.length() / PAGESIZE);
 
-			Map<Integer, Builder> pageInfo = new LinkedHashMap<Integer, Builder>();
+			Map<Integer, PageNav> pageInfo = new LinkedHashMap<Integer, PageNav>();
 
 			Map<Integer, String> colNames = getColumnNames(tableName);
-			Map<Integer, Builder> records = new LinkedHashMap<Integer, Builder>();
+			Map<Integer, PageNav> records = new LinkedHashMap<Integer, PageNav>();
 			for (int i = 0; i < noOfPages; i++) {
 				table.seek(PAGESIZE * i);
 				byte pageType = table.readByte();
 				if (pageType == 0x0D) {
 
-					Builder page = new Builder();
+					PageNav page = new PageNav();
 					page.setPageNo(i);
 					page.setPageType(pageType);
 
@@ -431,10 +424,10 @@ public class Builder {
 					for (int location = 0; location < noOfBuilders; location++) {
 						BuilderLocations[location] = table.readShort();
 					}
-					Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-					recordBuilders = getRecords(table, BuilderLocations, i);
+					Map<Integer, PageNav> recordBuilders = new LinkedHashMap<Integer, PageNav>();
+					recordBuilders = retreivePayload(table, BuilderLocations, i);
 
-					page.records = recordBuilders;
+					page.tuples = recordBuilders;
 					pageInfo.put(i, page);
 
 					records.putAll(recordBuilders);
@@ -442,7 +435,7 @@ public class Builder {
 			}
 
 			if (condition.length > 0) {
-				Map<Integer, Builder> filteredRecords = filterRecords(colNames, records, columnNames, condition);
+				Map<Integer, PageNav> filteredRecords = filterTuples(colNames, records, columnNames, condition);
 				table.close();
 				return filteredRecords;
 			} else {
@@ -456,13 +449,13 @@ public class Builder {
 
 	}
 
-	public static String[] getDataType(Map<Integer, Builder> column) {
+	public static String[] getDataType(Map<Integer, PageNav> column) {
 		int count = 0;
 		String[] dataType = new String[column.size()];
-		for (Map.Entry<Integer, Builder> entry : column.entrySet()) {
+		for (Map.Entry<Integer, PageNav> entry : column.entrySet()) {
 
-			Builder Builder = entry.getValue();
-			Builder payload = Builder.getPayload();
+			PageNav PageNav = entry.getValue();
+			PageNav payload = PageNav.getPayload();
 			String[] data = payload.data;
 			dataType[count] = data[2];
 			count++;
@@ -470,7 +463,7 @@ public class Builder {
 		return dataType;
 	}
 
-	public static Map<Integer, Builder> getcolumn(String tableName, String[] columnNames, String[] condition) {
+	public static Map<Integer, PageNav> getcolumn(String tableName, String[] columnNames, String[] condition) {
 
 		try {
 
@@ -478,7 +471,7 @@ public class Builder {
 			int noOfPages = (int) (table.length() / PAGESIZE);
 
 			Map<Integer, String> colNames = getColumnNames("davisbase_columns");
-			Map<Integer, Builder> records = new LinkedHashMap<Integer, Builder>();
+			Map<Integer, PageNav> records = new LinkedHashMap<Integer, PageNav>();
 			for (int i = 0; i < noOfPages; i++) {
 				table.seek(PAGESIZE * i);
 				byte pageType = table.readByte();
@@ -490,14 +483,14 @@ public class Builder {
 					for (int location = 0; location < noOfBuilders; location++) {
 						BuilderLocations[location] = table.readShort();
 					}
-					Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-					recordBuilders = getRecords(table, BuilderLocations, i);
+					Map<Integer, PageNav> recordBuilders = new LinkedHashMap<Integer, PageNav>();
+					recordBuilders = retreivePayload(table, BuilderLocations, i);
 					records.putAll(recordBuilders);
 				}
 			}
 
 			if (condition.length > 0) {
-				Map<Integer, Builder> filteredRecords = filterRecords(colNames, records, columnNames, condition);
+				Map<Integer, PageNav> filteredRecords = filterTuples(colNames, records, columnNames, condition);
 				table.close();
 				return filteredRecords;
 			} else {
@@ -521,9 +514,9 @@ public class Builder {
 		return a;
 	}
 	
-	public static void printTable(Map<Integer, String> colNames, Map<Integer, Builder> records) {
-		String colString = "";
-		String recString = "";
+	public static void printTable(Map<Integer, String> colNames, Map<Integer, PageNav> records) {
+		String col = "";
+		String row = "";
 		ArrayList<String> recList = new ArrayList<String>();
 		System.out.println(line("-", 120));
 		for (Map.Entry<Integer, String> entry : colNames.entrySet()) {
@@ -533,16 +526,16 @@ public class Builder {
 		}
 		System.out.println();
 		System.out.println(line("-", 120));
-		for (Map.Entry<Integer, Builder> entry : records.entrySet()) {
+		for (Map.Entry<Integer, PageNav> entry : records.entrySet()) {
 
-			Builder Builder = entry.getValue();
-			recString += Builder.rowId;
-			String data[] = Builder.getPayload().data;
-			System.out.format("%20s%10s", recString, "|");
+			PageNav PageNav = entry.getValue();
+			row += PageNav.rowId;
+			String data[] = PageNav.getPayload().data;
+			System.out.format("%20s%10s", row, "|");
 			for (String dataS : data) {
 				System.out.format("%20s%10s", dataS, "|");
 			}
-			recString = "";
+			row = "";
 			System.out.println();
 		}
 		System.out.println(line("-", 120));
@@ -557,65 +550,65 @@ public class Builder {
 		this.pageNo = pageNo;
 	}
 
-	public static Map<Integer, Builder> filterRecords(Map<Integer, String> colNames, Map<Integer, Builder> records,
+	public static Map<Integer, PageNav> filterTuples(Map<Integer, String> colNames, Map<Integer, PageNav> records,
 			String[] resultColumnNames, String[] condition) {
 
 		Set<String> resultColumnSet = new HashSet<String>(Arrays.asList(resultColumnNames));
-		Map<Integer, Builder> filteredRecords = new LinkedHashMap<Integer, Builder>();
+		Map<Integer, PageNav> filteredTuples = new LinkedHashMap<Integer, PageNav>();
 
-		int whereOrdinalPosition = 2;
+		int wherePos = 2;
 		for (Map.Entry<Integer, String> entry : colNames.entrySet()) {
 			String columnName = entry.getValue();
 			if (columnName.equals(condition[0])) {
-				whereOrdinalPosition = entry.getKey();
+				wherePos = entry.getKey();
 			}
 		}
-		Set<Integer> ordinalPositions = colNames.keySet();
-		for (Map.Entry<Integer, Builder> entry : records.entrySet()) {
-			Builder Builder = entry.getValue();
-			Builder payload = Builder.getPayload();
+		Set<Integer> oPos = colNames.keySet();
+		for (Map.Entry<Integer, PageNav> entry : records.entrySet()) {
+			PageNav PageNav = entry.getValue();
+			PageNav payload = PageNav.getPayload();
 			String[] data = payload.data;
 			byte[] dataTypeCodes = payload.dataType;
 
 			boolean result;
-			if (whereOrdinalPosition == 1)
+			if (wherePos == 1)
 				result = checkData((byte) 0x06, entry.getKey().toString(), condition);
 			else
-				result = checkData(dataTypeCodes[whereOrdinalPosition - 2], data[whereOrdinalPosition - 2], condition);
+				result = checkData(dataTypeCodes[wherePos - 2], data[wherePos - 2], condition);
 
 			if (result)
-				filteredRecords.put(entry.getKey(), entry.getValue());
+				filteredTuples.put(entry.getKey(), entry.getValue());
 		}
 
-		return filteredRecords;
+		return filteredTuples;
 
 	}
 
-	public static Map<Integer, Builder> filterRecordsByData(Map<Integer, String> colNames,
-			Map<Integer, Builder> records, String[] resultColumnNames, String[] condition) {
+	public static Map<Integer, PageNav> filterTuplesByData(Map<Integer, String> colNames,
+			Map<Integer, PageNav> records, String[] resultColumnNames, String[] condition) {
 
 		Set<String> resultColumnSet = new HashSet<String>(Arrays.asList(resultColumnNames));
-		Map<Integer, Builder> filteredRecords = new LinkedHashMap<Integer, Builder>();
+		Map<Integer, PageNav> filteredRecords = new LinkedHashMap<Integer, PageNav>();
 
-		int whereOrdinalPosition = 2;
+		int wherePos = 2;
 		for (Map.Entry<Integer, String> entry : colNames.entrySet()) {
 			String columnName = entry.getValue();
 			if (columnName.equals(condition[0])) {
-				whereOrdinalPosition = entry.getKey();
+				wherePos = entry.getKey();
 			}
 		}
-		Set<Integer> ordinalPositions = colNames.keySet();
-		for (Map.Entry<Integer, Builder> entry : records.entrySet()) {
-			Builder Builder = entry.getValue();
-			Builder payload = Builder.getPayload();
+		Set<Integer> oPos = colNames.keySet();
+		for (Map.Entry<Integer, PageNav> entry : records.entrySet()) {
+			PageNav PageNav = entry.getValue();
+			PageNav payload = PageNav.getPayload();
 			String[] data = payload.data;
 			byte[] dataTypeCodes = payload.dataType;
 
 			boolean result;
-			if (whereOrdinalPosition == 1)
+			if (wherePos == 1)
 				result = checkData((byte) 0x06, entry.getKey().toString(), condition);
 			else
-				result = checkData(dataTypeCodes[whereOrdinalPosition - 2], data[whereOrdinalPosition - 2], condition);
+				result = checkData(dataTypeCodes[wherePos - 2], data[wherePos - 2], condition);
 
 			if (result)
 				filteredRecords.put(entry.getKey(), entry.getValue());
@@ -725,20 +718,20 @@ public class Builder {
 				byte pageType = table.readByte();
 				if (pageType == 0x0D) {
 
-					int noOfBuilders = table.readByte();
-					short[] BuilderLocations = new short[noOfBuilders];
+					int noOfBlds = table.readByte();
+					short[] BldLocn = new short[noOfBlds];
 					table.seek((PAGESIZE * i) + 8);
-					for (int location = 0; location < noOfBuilders; location++) {
-						BuilderLocations[location] = table.readShort();
+					for (int location = 0; location < noOfBlds; location++) {
+						BldLocn[location] = table.readShort();
 					}
-					Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-					recordBuilders = getRecords(table, BuilderLocations, i);
+					Map<Integer, PageNav> recordBuilders = new LinkedHashMap<Integer, PageNav>();
+					recordBuilders = retreivePayload(table, BldLocn, i);
 
-					for (Map.Entry<Integer, Builder> entry : recordBuilders.entrySet()) {
+					for (Map.Entry<Integer, PageNav> entry : recordBuilders.entrySet()) {
 
-						Builder Builder = entry.getValue();
+						PageNav PageNav = entry.getValue();
 
-						Builder payload = Builder.getPayload();
+						PageNav payload = PageNav.getPayload();
 						String[] data = payload.data;
 						if (data[0].equalsIgnoreCase(tableName)) {
 							columns.put(Integer.parseInt(data[3]), data[1]);
@@ -759,27 +752,27 @@ public class Builder {
 
 	}
 
-	public static Map<Integer, Builder> getRecords(RandomAccessFile table, short[] BuilderLocations, int pageNo) {
+	public static Map<Integer, PageNav> retreivePayload(RandomAccessFile table, short[] BuilderLocations, int pageNo) {
 
-		Map<Integer, Builder> Builders = new LinkedHashMap<Integer, Builder>();
+		Map<Integer, PageNav> PageNavs = new LinkedHashMap<Integer, PageNav>();
 		for (int position = 0; position < BuilderLocations.length; position++) {
 			try {
-				Builder Builder = new Builder();
-				Builder.pageNumber = pageNo;
+				PageNav PageNav = new PageNav();
+				PageNav.pageNumber = pageNo;
 
-				Builder.location = BuilderLocations[position];
+				PageNav.location = BuilderLocations[position];
 
 				table.seek(BuilderLocations[position]);
 
 				short payLoadSize = table.readShort();
-				Builder.payLoadSize = payLoadSize;
+				PageNav.payLoadSize = payLoadSize;
 
 				int rowId = table.readInt();
-				Builder.rowId = rowId;
+				PageNav.rowId = rowId;
 
-				Builder payload = new Builder();
+				PageNav payload = new PageNav();
 				byte num_cols = table.readByte();
-				payload.numberOfColumns = num_cols;
+				payload.noOfCols = num_cols;
 
 				byte[] dataType = new byte[num_cols];
 				int colsRead = table.read(dataType);
@@ -855,21 +848,20 @@ public class Builder {
 
 				}
 
-				Builder.setPayload(payload);
-				Builders.put(rowId, Builder);
+				PageNav.setPayload(payload);
+				PageNavs.put(rowId, PageNav);
 
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 
 		}
-		return Builders;
+		return PageNavs;
 	}
 
 	
-
 	public static short dataLength(byte codes) {
-		switch (codes) {// length of data type provided by in the requirement
+		switch (codes) {
 		case 0x00:
 			return 1;
 		case 0x01:
@@ -899,7 +891,7 @@ public class Builder {
 		}
 	}
 
-	public static String[] check(String str) {
+	public static String[] cmpCheck(String str) {
 
 		String condition[] = new String[3];
 		String values[] = new String[2];
@@ -948,7 +940,7 @@ public class Builder {
 		return condition;
 	}
 
-	public static void updateMetaOffset(RandomAccessFile davisbaseTables, String metaTable, String tableName)
+	public static void upadateMetaTable(RandomAccessFile davisbaseTables, String metaTable, String tableName)
 			throws IOException {
 		int noOfPages = (int) (davisbaseTables.length() / PAGESIZE);
 
@@ -959,25 +951,25 @@ public class Builder {
 			byte pageType = davisbaseTables.readByte();
 			if (pageType == 0x0D) {
 
-				int noOfBuilders = davisbaseTables.readByte();
-				short[] BuilderLocations = new short[noOfBuilders];
+				int noOfBlds = davisbaseTables.readByte();
+				short[] BldLocn = new short[noOfBlds];
 				davisbaseTables.seek((PAGESIZE * i) + 8);
-				for (int location = 0; location < noOfBuilders; location++) {
-					BuilderLocations[location] = davisbaseTables.readShort();
+				for (int location = 0; location < noOfBlds; location++) {
+					BldLocn[location] = davisbaseTables.readShort();
 				}
-				Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-				recordBuilders = getRecords(davisbaseTables, BuilderLocations, i);
+				Map<Integer, PageNav> recBlds = new LinkedHashMap<Integer, PageNav>();
+				recBlds = retreivePayload(davisbaseTables, BldLocn, i);
 
 				String[] condition = { "table_name", "<>", tableName };
 				String[] columnNames = { "*" };
 
-				Map<Integer, Builder> filteredRecs = filterRecordsByData(colNames, recordBuilders, columnNames,
+				Map<Integer, PageNav> filteredRecs = filterTuplesByData(colNames, recBlds, columnNames,
 						condition);
 				short[] offsets = new short[filteredRecs.size()];
 				int l = 0;
-				for (Map.Entry<Integer, Builder> entry : filteredRecs.entrySet()) {
-					Builder Builder = entry.getValue();
-					offsets[l] = Builder.location;
+				for (Map.Entry<Integer, PageNav> entry : filteredRecs.entrySet()) {
+					PageNav PageNav = entry.getValue();
+					offsets[l] = PageNav.location;
 					davisbaseTables.seek(i * PAGESIZE + 8 + (2 * l));
 					davisbaseTables.writeShort(offsets[l]);
 					l++;

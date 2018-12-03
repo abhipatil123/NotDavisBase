@@ -35,31 +35,24 @@ public class ParseCommands {
 		String[] table = delete[0].trim().split("from");
 		String[] table1 = table[1].trim().split(" ");
 		String tableName = table1[1].trim();
-		String[] cond = Builder.check(delete[1]);
+		String[] check = PageNav.cmpCheck(delete[1]);
 
 		if (!findTable(tableName)) {
 			System.out.println("Table not present");
 			return;
 		}
 		try {
-			ExecuteCommands.delete(tableName, cond);
+			ExecuteCommands.delete(tableName, check);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	/**
-	 * Stub method for dropping tables
-	 * 
-	 * @param dropTableString
-	 *            is a String of the user input
-	 * @throws FileNotFoundException 
-	 */
-	public static void dropTable(String dropTableString) throws FileNotFoundException {
+	public static void parseDropTable(String dropTableString) throws FileNotFoundException {
 		System.out.println("Parsing the string:\"" + dropTableString + "\"");
-		String[] droptemp = dropTableString.split(" ");
+		String[] temp = dropTableString.split(" ");
 
-		String tableName = droptemp[2].trim();
+		String tableName = temp[2].trim();
 
 		if (!findTable(tableName)) {
 			System.out.println("Table " + tableName + " is not present.");
@@ -71,13 +64,7 @@ public class ParseCommands {
 
 	}
 
-	/**
-	 * Stub method for executing queries
-	 * 
-	 * @param queryString
-	 *            is a String of the user input
-	 */
-	public static void parseQueryString(String queryString) {
+	public static void parseSearchString(String queryString) {
 		System.out.println("Parsing the string:\"" + queryString + "\"");
 		String tableName;
 		String[] columnNames;
@@ -95,9 +82,9 @@ public class ParseCommands {
 				columnNames[i] = columnNames[i].trim();
 
 			if (temp.length > 1)
-				condition = Builder.check(temp[1]);
+				condition = PageNav.cmpCheck(temp[1]);
 
-			ExecuteCommands.Query(tableName, columnNames, condition);
+			ExecuteCommands.parseQuery(tableName, columnNames, condition);
 		}
 	}
 
@@ -115,12 +102,12 @@ public class ParseCommands {
 			String[] findupdate = updates[1].split("where");
 			set_value = findupdate[0].trim();
 			where = findupdate[1].trim();
-			ExecuteCommands.update(tablename, Builder.check(set_value), Builder.check((where)));
+			ExecuteCommands.update(tablename, PageNav.cmpCheck(set_value), PageNav.cmpCheck((where)));
 		} else {
 			set_value = updates[1].trim();
 
 			String[] no_where = new String[0];
-			ExecuteCommands.update(tablename, Builder.check(set_value), no_where);
+			ExecuteCommands.update(tablename, PageNav.cmpCheck(set_value), no_where);
 		}
 	}
 

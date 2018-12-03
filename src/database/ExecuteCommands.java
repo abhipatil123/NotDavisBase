@@ -27,7 +27,7 @@ public class ExecuteCommands {
 			int noOfPages = (int) (davisbaseTables.length() / PAGESIZE);
 			int page = 0;
 
-			Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
+			Map<Integer, PageNav> addRecords = new LinkedHashMap<Integer, PageNav>();
 			for (int i = 0; i < noOfPages; i++) {
 				davisbaseTables.seek((i * PAGESIZE) + 4);
 				int filePointer = davisbaseTables.readInt();
@@ -40,11 +40,11 @@ public class ExecuteCommands {
 					for (int location = 0; location < noOfBuilders; location++) {
 						BuilderLocations[location] = davisbaseTables.readShort();
 					}
-					recordBuilders = Builder.getRecords(davisbaseTables, BuilderLocations, i);
+					addRecords = PageNav.retreivePayload(davisbaseTables, BuilderLocations, i);
 				}
 			}
 			davisbaseTables.close();
-			Set<Integer> rowIds = recordBuilders.keySet();
+			Set<Integer> rowIds = addRecords.keySet();
 			Set<Integer> sortedRowIds = new TreeSet<Integer>(rowIds);
 			Integer rows[] = sortedRowIds.toArray(new Integer[sortedRowIds.size()]);
 			int key = rows[rows.length - 1] + 1;
@@ -56,23 +56,23 @@ public class ExecuteCommands {
 			noOfPages = (int) (davisbaseColumns.length() / PAGESIZE);
 			page = 0;
 
-			recordBuilders = new LinkedHashMap<Integer, Builder>();
+			addRecords = new LinkedHashMap<Integer, PageNav>();
 			for (int i = 0; i < noOfPages; i++) {
 				davisbaseColumns.seek((i * PAGESIZE) + 4);
 				int filePointer = davisbaseColumns.readInt();
 				if (filePointer == -1) {
 					page = i;
 					davisbaseColumns.seek(i * PAGESIZE + 1);
-					int noOfBuilders = davisbaseColumns.readByte();
-					short[] BuilderLocations = new short[noOfBuilders];
+					int noBlds = davisbaseColumns.readByte();
+					short[] BldsLocn = new short[noBlds];
 					davisbaseColumns.seek((PAGESIZE * i) + 8);
-					for (int location = 0; location < noOfBuilders; location++) {
-						BuilderLocations[location] = davisbaseColumns.readShort();
+					for (int location = 0; location < noBlds; location++) {
+						BldsLocn[location] = davisbaseColumns.readShort();
 					}
-					recordBuilders = Builder.getRecords(davisbaseColumns, BuilderLocations, i);
+					addRecords = PageNav.retreivePayload(davisbaseColumns, BldsLocn, i);
 				}
 			}
-			rowIds = recordBuilders.keySet();
+			rowIds = addRecords.keySet();
 			sortedRowIds = new TreeSet<Integer>(rowIds);
 			rows = sortedRowIds.toArray(new Integer[sortedRowIds.size()]);
 			key = rows[rows.length - 1];
@@ -104,78 +104,76 @@ public class ExecuteCommands {
 
 	}
 	
-	
-	// insert functionality
-		public static void insert(String tableName, String[] values) {
-			try {
-				tableName = tableName.trim();// remove white spaces
-				String path = "data/userdata/" + tableName + ".tbl";
-				if (tableName.equalsIgnoreCase("davisbase_tables") || tableName.equalsIgnoreCase("davisbase_columns"))
-					path = "data/catalog/" + tableName + ".tbl";
+	public static void insert(String tableName, String[] values) {
+		try {
+			tableName = tableName.trim();
+			String path = "data/userdata/" + tableName + ".tbl";
+			if (tableName.equalsIgnoreCase("davisbase_tables") || tableName.equalsIgnoreCase("davisbase_columns"))
+				path = "data/catalog/" + tableName + ".tbl";
 
-				RandomAccessFile table = new RandomAccessFile(path, "rw");
+			RandomAccessFile table = new RandomAccessFile(path, "rw");
 
-				String condition[] = { "table_name", "=", tableName };
-				String columnNames[] = { "*" };
-				Map<Integer, Builder> column = Builder.getcolumn(tableName, columnNames, condition);
-				String[] dataType = Builder.getDataType(column);
+			String condition[] = { "table_name", "=", tableName };
+			String columnNames[] = { "*" };
+			Map<Integer, PageNav> column = PageNav.getcolumn(tableName, columnNames, condition);
+			String[] dataType = PageNav.getDataType(column);
 
-				int count = 0;
-				String[] nullable = new String[column.size()];
-				for (Map.Entry<Integer, Builder> entry : column.entrySet()) {
+			int count = 0;
+			String[] nullable = new String[column.size()];
+			for (Map.Entry<Integer, PageNav> entry : column.entrySet()) {
 
-					Builder Builder = entry.getValue();
-					Builder payload = Builder.getPayload();
-					String[] data = payload.data;
-					nullable[count] = data[4];
-					count++;
-				}
+				PageNav PageNav = entry.getValue();
+				PageNav payload = PageNav.getPayload();
+				String[] data = payload.data;
+				nullable[count] = data[4];
+				count++;
+			}
 
-				String[] isNullable = nullable;// check for null case
+			String[] isNullable = nullable;
 
-				for (int i = 0; i < values.length; i++) {
-					if (values[i].equalsIgnoreCase("null") && isNullable[i].equals("NO")) {
-						System.out.println("Cannot insert NULL values in NOT NULL field");
-						table.close();
-						return;
-					}
-				}
-				condition = new String[0];
-
-				int pageNo = Builder.getPage(tableName, Integer.parseInt(values[0]));
-
-				Map<Integer, Builder> data = Builder.getData(tableName, columnNames, condition);
-				if (data.containsKey(Integer.parseInt(values[0]))) {
-					System.out.println("Duplicate value for primary key");
+			for (int i = 0; i < values.length; i++) {
+				if (values[i].equalsIgnoreCase("null") && isNullable[i].equals("NO")) {
+					System.out.println("Cannot insert NULL values in NOT NULL field");
 					table.close();
 					return;
 				}
-
-				byte[] plDataType = new byte[dataType.length - 1];
-				int payLoadSize = Builder.getPayloadSize(tableName, values, plDataType, dataType);
-				payLoadSize = payLoadSize + 6;
-
-				int address = TreeFunctions.checkOverFlow(table, pageNo, payLoadSize);
-
-				if (address != -1) {
-					Builder Builder1 = Builder.BuilderForm(pageNo, Integer.parseInt(values[0]), (short) payLoadSize, plDataType,
-							values);
-					Builder.payload(table, Builder1, address);
-				} else {
-					TreeFunctions.splitLeaf(table, pageNo);
-					int pNo = Builder.getPage(tableName, Integer.parseInt(values[0]));
-					int addr = TreeFunctions.checkOverFlow(table, pNo, payLoadSize);
-					Builder Builder1 = Builder.BuilderForm(pNo, Integer.parseInt(values[0]), (short) payLoadSize, plDataType,
-							values);
-					Builder.payload(table, Builder1, addr);
-				}
-				table.close();
-				
-			} catch (Exception e) {
-				
-				e.printStackTrace();
 			}
+			condition = new String[0];
+
+			int pageNo = PageNav.getPage(tableName, Integer.parseInt(values[0]));
+
+			Map<Integer, PageNav> data = PageNav.getData(tableName, columnNames, condition);
+			if (data.containsKey(Integer.parseInt(values[0]))) {
+				System.out.println("Duplicate value for primary key");
+				table.close();
+				return;
+			}
+
+			byte[] payloadType = new byte[dataType.length - 1];
+			int payLoadSize = PageNav.getPayloadSize(tableName, values, payloadType, dataType);
+			payLoadSize = payLoadSize + 6;
+
+			int address = TreeFunctions.checkOverFlow(table, pageNo, payLoadSize);
+
+			if (address != -1) {
+				PageNav Builder1 = PageNav.AddPage(pageNo, Integer.parseInt(values[0]), (short) payLoadSize, payloadType,
+						values);
+				PageNav.payload(table, Builder1, address);
+			} else {
+				TreeFunctions.splitLeaf(table, pageNo);
+				int pNo = PageNav.getPage(tableName, Integer.parseInt(values[0]));
+				int addr = TreeFunctions.checkOverFlow(table, pNo, payLoadSize);
+				PageNav Builder1 = PageNav.AddPage(pNo, Integer.parseInt(values[0]), (short) payLoadSize, payloadType,
+						values);
+				PageNav.payload(table, Builder1, addr);
+			}
+			table.close();
+			
+		} catch (Exception e) {
+			
+			e.printStackTrace();
 		}
+	}
 		
 		public static void delete(String tableName, String[] cond) throws IOException {
 
@@ -188,15 +186,15 @@ public class ExecuteCommands {
 
 				String condition[] = { "table_name", "=", tableName };
 				String columnNames[] = { "*" };
-				Map<Integer, Builder> column = Builder.getcolumn(tableName, columnNames, condition);
-				String[] dataType = Builder.getDataType(column);
+				Map<Integer, PageNav> column = PageNav.getcolumn(tableName, columnNames, condition);
+				String[] dataType = PageNav.getDataType(column);
 
 				int count = 0;
 				String[] nullable = new String[column.size()];
-				for (Map.Entry<Integer, Builder> entry : column.entrySet()) {
+				for (Map.Entry<Integer, PageNav> entry : column.entrySet()) {
 
-					Builder Builder = entry.getValue();
-					Builder payload = Builder.getPayload();
+					PageNav PageNav = entry.getValue();
+					PageNav payload = PageNav.getPayload();
 					String[] data = payload.data;
 					nullable[count] = data[4];
 					count++;
@@ -204,34 +202,34 @@ public class ExecuteCommands {
 
 				String[] isNullable = nullable;
 
-				Map<Integer, String> colNames = Builder.getColumnNames(tableName);
+				Map<Integer, String> colNames = PageNav.getColumnNames(tableName);
 
 				condition = new String[0];
 
-				int pageNo = Builder.getPage(tableName, Integer.parseInt(cond[2]));
+				int pageNo = PageNav.getPage(tableName, Integer.parseInt(cond[2]));
 
-				Map<Integer, Builder> data = Builder.getData(tableName, columnNames, condition);
+				Map<Integer, PageNav> data = PageNav.getData(tableName, columnNames, condition);
 				if (data.containsKey(Integer.parseInt(cond[2]))) {
 					table.seek((PAGESIZE * pageNo) + 1);
-					int noOfBuilders = table.readByte();
-					short[] BuilderLocations = new short[noOfBuilders];
+					int noBlds = table.readByte();
+					short[] BldLocn = new short[noBlds];
 					table.seek((PAGESIZE * pageNo) + 8);
-					for (int location = 0; location < noOfBuilders; location++) {
-						BuilderLocations[location] = table.readShort();
+					for (int location = 0; location < noBlds; location++) {
+						BldLocn[location] = table.readShort();
 					}
-					Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-					recordBuilders = Builder.getRecords(table, BuilderLocations, pageNo);
+					Map<Integer, PageNav> recordBuilders = new LinkedHashMap<Integer, PageNav>();
+					recordBuilders = PageNav.retreivePayload(table, BldLocn, pageNo);
 
 					String[] condition1 = { cond[0], "<>", cond[2] };
 					String[] columnNames1 = { "*" };
 
-					Map<Integer, Builder> filteredRecs = Builder.filterRecordsByData(colNames, recordBuilders, columnNames,
+					Map<Integer, PageNav> filteredRecs = PageNav.filterTuplesByData(colNames, recordBuilders, columnNames,
 							condition1);
 					short[] offsets = new short[filteredRecs.size()];
 					int l = 0;
-					for (Map.Entry<Integer, Builder> entry : filteredRecs.entrySet()) {
-						Builder Builder = entry.getValue();
-						offsets[l] = Builder.location;
+					for (Map.Entry<Integer, PageNav> entry : filteredRecs.entrySet()) {
+						PageNav PageNav = entry.getValue();
+						offsets[l] = PageNav.location;
 						table.seek(pageNo * PAGESIZE + 8 + (2 * l));
 						table.writeShort(offsets[l]);
 						l++;
@@ -255,15 +253,14 @@ public class ExecuteCommands {
 			try {
 				
 				RandomAccessFile davisbaseTables = new RandomAccessFile("data/catalog/davisbase_tables.tbl", "rw");
-				Builder.updateMetaOffset(davisbaseTables, "davisbase_tables", tableName);
+				PageNav.upadateMetaTable(davisbaseTables, "davisbase_tables", tableName);
 
 				RandomAccessFile davisbaseColumns = new RandomAccessFile("data/catalog/davisbase_columns.tbl", "rw");
-				Builder.updateMetaOffset(davisbaseColumns, "davisbase_columns", tableName);
+				PageNav.upadateMetaTable(davisbaseColumns, "davisbase_columns", tableName);
 
 				
 				File file = new File("data/userdata/" + tableName + ".tbl");
 				if(file.delete()) {
-					
 				}else {
 				FileOutputStream fp=new FileOutputStream(file);
 				fp=null;
@@ -273,10 +270,8 @@ public class ExecuteCommands {
 			}
 		}
 		
-		public static void Query(String tableName, String[] columnNames, String[] condition) {
-
+		public static void parseQuery(String tableName, String[] columnNames, String[] condition) {
 			try {
-
 				tableName = tableName.trim();
 				String path = "data/userdata/" + tableName + ".tbl";
 				if (tableName.equalsIgnoreCase("davisbase_tables") || tableName.equalsIgnoreCase("davisbase_columns"))
@@ -285,33 +280,32 @@ public class ExecuteCommands {
 				RandomAccessFile table = new RandomAccessFile(path, "rw");
 				int noOfPages = (int) (table.length() / PAGESIZE);
 
-				Map<Integer, String> colNames = Builder.getColumnNames(tableName);
-				Map<Integer, Builder> records = new LinkedHashMap<Integer, Builder>();
+				Map<Integer, String> colNames = PageNav.getColumnNames(tableName);
+				Map<Integer, PageNav> records = new LinkedHashMap<Integer, PageNav>();
 				for (int i = 0; i < noOfPages; i++) {
 					table.seek(PAGESIZE * i);
 					byte pageType = table.readByte();
 					if (pageType == 0x0D) {
-
-						int noOfBuilders = table.readByte();
-						short[] BuilderLocations = new short[noOfBuilders];
+						int noBlds = table.readByte();
+						short[] BldLocn = new short[noBlds];
 						table.seek((PAGESIZE * i) + 8);
-						for (int location = 0; location < noOfBuilders; location++) {
-							BuilderLocations[location] = table.readShort();
+						for (int location = 0; location < noBlds; location++) {
+							BldLocn[location] = table.readShort();
 						}
-						Map<Integer, Builder> recordBuilders = new LinkedHashMap<Integer, Builder>();
-						recordBuilders = Builder.getRecords(table, BuilderLocations, i);
+						Map<Integer, PageNav> recordBuilders = new LinkedHashMap<Integer, PageNav>();
+						recordBuilders = PageNav.retreivePayload(table, BldLocn, i);
 						records.putAll(recordBuilders);
 					}
 				}
 
 				if (condition.length > 0) {
-					Map<Integer, Builder> filteredRecords = Builder.filterRecords(colNames, records, columnNames, condition);
-					Builder.printTable(colNames, filteredRecords);
+					Map<Integer, PageNav> filterTuple = PageNav.filterTuples(colNames, records, columnNames, condition);
+					PageNav.printTable(colNames, filterTuple);
 				} else {
 					if (records.isEmpty()) {
 						System.out.println("Empty Set..");
 					} else {
-						Builder.printTable(colNames, records);
+						PageNav.printTable(colNames, records);
 					}
 				}
 				table.close();
@@ -332,22 +326,22 @@ public class ExecuteCommands {
 
 				String condition[] = { "table_name", "=", tableName };
 				String columnNames[] = { "*" };
-				Map<Integer, Builder> column = Builder.getcolumn(tableName, columnNames, condition);
-				String[] dataType = Builder.getDataType(column);
+				Map<Integer, PageNav> column = PageNav.getcolumn(tableName, columnNames, condition);
+				String[] dataType = PageNav.getDataType(column);
 
 				int count = 0;
 				String[] nullable = new String[column.size()];
-				for (Map.Entry<Integer, Builder> entry : column.entrySet()) {
+				for (Map.Entry<Integer, PageNav> entry : column.entrySet()) {
 
-					Builder Builder = entry.getValue();
-					Builder payload = Builder.getPayload();
+					PageNav PageNav = entry.getValue();
+					PageNav payload = PageNav.getPayload();
 					String[] data = payload.data;
 					nullable[count] = data[4];
 					count++;
 				}
 				String[] isNullable = nullable;
 
-				Map<Integer, String> colNames = Builder.getColumnNames(tableName);
+				Map<Integer, String> colNames = PageNav.getColumnNames(tableName);
 
 				int k = -1;
 				for (Map.Entry<Integer, String> entry : colNames.entrySet()) {
@@ -361,9 +355,9 @@ public class ExecuteCommands {
 					int key = Integer.parseInt(cond[2]);
 					condition = new String[0];
 
-					int pageno = Builder.getPage(tableName, Integer.parseInt(cond[2]));
+					int pageno = PageNav.getPage(tableName, Integer.parseInt(cond[2]));
 
-					Map<Integer, Builder> data = Builder.getData(tableName, columnNames, condition);
+					Map<Integer, PageNav> data = PageNav.getData(tableName, columnNames, condition);
 					if (data.containsKey(Integer.parseInt(cond[2]))) {
 
 						try {
@@ -382,7 +376,7 @@ public class ExecuteCommands {
 									file.read(sc);
 									int seek_positions = 0;
 									for (int i = 0; i < k - 2; i++) {
-										seek_positions += Builder.dataLength(sc[i]);
+										seek_positions += PageNav.dataLength(sc[i]);
 									}
 									file.seek(offsetLocations[j] + 6 + no + 1 + seek_positions);
 
@@ -462,7 +456,7 @@ public class ExecuteCommands {
 									file.read(sc);
 									int seek_positions = 0;
 									for (int i = 0; i < k - 2; i++) {
-										seek_positions += Builder.dataLength(sc[i]);
+										seek_positions += PageNav.dataLength(sc[i]);
 									}
 									file.seek(offsetLocations[j] + 6 + no + 1 + seek_positions);
 

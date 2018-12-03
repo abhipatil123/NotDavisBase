@@ -15,30 +15,21 @@ public class DavisBase {
 	static String copyright = "Chris Irwin Davis";
 	static boolean isExit = false;
 	/*
-	 * Page size for all files is 512 bytes by default. You may choose to make it
-	 * user modifiable
+	 * Page size for all files is 512 bytes.
 	 */
 	static long pageSize = 512;
 
-	/*
-	 * The Scanner class is used to collect user commands from the prompt There are
-	 * many ways to do this. This is just one.
-	 *
-	 * Each time the semicolon (;) delimiter is entered, the userCommand String is
-	 * re-populated.
-	 */
 	static Scanner scanner = new Scanner(System.in).useDelimiter(";");
 
 	public static void main(String[] args) throws FileNotFoundException {
 
 		/* Display the welcome screen */
-		splashScreen();
+		welcomScreen();
 
 		/* Variable to collect user input from the prompt */
 		String userCommand = "";
-		// Builder.initializeDatabase();
 
-		Initialization.initialize();
+		Initialization.initialize(); //Initialize database with davisbase_tables and davisbase_columns
 
 		while (!isExit) {
 			System.out.print(prompt);
@@ -50,9 +41,9 @@ public class DavisBase {
 		System.out.println("Exiting...");
 	}
 
-	public static void splashScreen() {
+	public static void welcomScreen() {
 		System.out.println(line("-", 80));
-		System.out.println("Welcome to DavisBaseLite"); // Display the string.
+		System.out.println("Welcome to DavisBaseLite"); 
 		System.out.println("DavisBaseLite Version " + getVersion());
 		System.out.println(getCopyright());
 		System.out.println("\nType \"help;\" to display supported commands.");
@@ -75,12 +66,16 @@ public class DavisBase {
 		System.out.println("SUPPORTED COMMANDS");
 		System.out.println("All commands below are case insensitive");
 		System.out.println();
-		System.out.println("\tSELECT * FROM table_name;                        Display all records in the table.");
-		System.out.println("\tSELECT * FROM table_name WHERE rowid = <value>;  Display records whose rowid is <id>.");
-		System.out.println("\tDROP TABLE table_name;                           Remove table data and its schema.");
-		System.out.println("\tVERSION;                                         Show the program version.");
-		System.out.println("\tHELP;                                            Show this help information");
-		System.out.println("\tEXIT;                                            Exit the program");
+		System.out.println("\tCREATE TABLE table_name(col1 data_type, col2 data_type) ; 		Create a new table.");
+		System.out.println("\tINSERT INTO TABLE table_name(val1, val2) ; 	  			Insert into table.");
+		System.out.println("\tSELECT * FROM table_name;                        			Display all records in the table.");
+		System.out.println("\tSELECT * FROM table_name WHERE rowid = <value>;  			Display records whose rowid is <id>.");
+		System.out.println("\tUPDATE table_name SET COL_NAME=VAL WHERE rowid = <value>; 		Update table column record.");
+		System.out.println("\tDROP TABLE table_name;                           			Remove table data and its schema.");
+		System.out.println("\tDELETE FROM TABLE table_name WHERE rowid = <value>;			Remove record from the table  whose rowid is <id>.");
+		System.out.println("\tVERSION;                                         			Show the program version.");
+		System.out.println("\tHELP;                                           			Show this help information");
+		System.out.println("\tEXIT;                                            			Exit the program");
 		System.out.println();
 		System.out.println();
 		System.out.println(line("*", 80));
@@ -103,28 +98,25 @@ public class DavisBase {
 	public static void parseUserCommand(String userCommand) throws FileNotFoundException {
 
 		/*
-		 * commandTokens is an array of Strings that contains one token per array
-		 * element The first token can be used to determine the type of command The
-		 * other tokens can be used to pass relevant parameters to each command-specific
-		 * method inside each case statement
+		 * splitCommand is an array of Strings that contains one string per array
+		 * element The first string can be used to determine the type of command 
 		 */
-		// String[] commandTokens = userCommand.split(" ");
-		ArrayList<String> commandTokens = new ArrayList<String>(Arrays.asList(userCommand.split(" ")));
+		ArrayList<String> splitCommand = new ArrayList<String>(Arrays.asList(userCommand.split(" ")));
 
-		switch (commandTokens.get(0)) {
+		switch (splitCommand.get(0)) {
 
 		case "show":
 			String[] condition = new String[0];
 			String[] columnNames = { "*" };
-			ExecuteCommands.Query("davisbase_tables", columnNames, condition);
+			ExecuteCommands.parseQuery("davisbase_tables", columnNames, condition);
 			break;
 		case "select":
 			System.out.println("CASE: SELECT");
-			ParseCommands.parseQueryString(userCommand);
+			ParseCommands.parseSearchString(userCommand);
 			break;
 		case "drop":
 			System.out.println("CASE: DROP");
-			ParseCommands.dropTable(userCommand);
+			ParseCommands.parseDropTable(userCommand);
 			break;
 		case "create":
 			System.out.println("CASE: CREATE");

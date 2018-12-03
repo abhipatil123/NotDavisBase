@@ -8,17 +8,15 @@ public class TreeFunctions {
 	
 	public static int PAGESIZE = 512;// page size
 	
-	
-	// keep track of parent nodes
 	public static void setParent(RandomAccessFile table, int parent, int childPage, int midkey) {
 		try {
 			table.seek((parent - 1) * PAGESIZE + 1);
-			int numrecords = table.read();
-			if (Builder.checkCapacity(table, parent)) {
+			int noOfRecs = table.read();
+			if (PageNav.checkCapacity(table, parent)) {
 
 				int content = (parent) * PAGESIZE;
 				TreeMap<Integer, Short> offsets = new TreeMap<Integer, Short>();
-				if (numrecords == 0) {
+				if (noOfRecs == 0) {
 					table.seek((parent - 1) * PAGESIZE + 1);
 					table.write(1);
 					content = content - 8;
@@ -38,7 +36,7 @@ public class TreeFunctions {
 					table.writeInt(midkey);
 					table.seek((parent - 1) * PAGESIZE + 2);
 					table.writeShort(BuilderContentArea);
-					for (int i = 0; i < numrecords; i++) {
+					for (int i = 0; i < noOfRecs; i++) {
 						table.seek((parent - 1) * PAGESIZE + 8 + 2 * i);
 						short off = table.readShort();
 						table.seek(off + 4);
@@ -47,7 +45,7 @@ public class TreeFunctions {
 					}
 					offsets.put(midkey, BuilderContentArea);
 					table.seek((parent - 1) * PAGESIZE + 1);
-					table.write(numrecords++);
+					table.write(noOfRecs++);
 					table.seek((parent - 1) * PAGESIZE + 8);
 					for (Entry<Integer, Short> entry : offsets.entrySet()) {
 						table.writeShort(entry.getValue());
@@ -63,12 +61,12 @@ public class TreeFunctions {
 
 	}
 		
-		// get the parent node
+	
 	public static int getParent(RandomAccessFile table, int page) {
 
 			try {
-				int numpages = (int) (table.length() / PAGESIZE);
-				for (int i = 0; i < numpages; i++) {
+				int noOfPages = (int) (table.length() / PAGESIZE);
+				for (int i = 0; i < noOfPages; i++) {
 
 					table.seek(i * PAGESIZE);
 					byte pageType = table.readByte();
@@ -99,7 +97,7 @@ public class TreeFunctions {
 			return 0;
 		}
 		
-		private static void transferValue(RandomAccessFile table, int currentPage, int newPage, int midKey) {
+		private static void changeValues(RandomAccessFile table, int currentPage, int newPage, int midKey) {
 			try {
 
 				table.seek((currentPage) * PAGESIZE);
@@ -157,12 +155,12 @@ public class TreeFunctions {
 
 				int parent = TreeFunctions.getParent(table, currentPage + 1);
 				if (parent == 0) {
-					int parentpage = Builder.createPage(table);
+					int parentpage = PageNav.createPage(table);
 					TreeFunctions.setParent(table, parentpage, currentPage, midKey);
 					table.seek((parentpage - 1) * PAGESIZE + 4);
 					table.writeInt(newPage);
 				} else {
-					if (Builder.rightPointer(table, parent, currentPage + 1)) {
+					if (PageNav.rightPointer(table, parent, currentPage + 1)) {
 						TreeFunctions.setParent(table, parent, currentPage, midKey);
 						table.seek((parent - 1) * PAGESIZE + 4);
 						table.writeInt(newPage);
@@ -177,12 +175,12 @@ public class TreeFunctions {
 		}
 		
 		public static void splitLeaf(RandomAccessFile table, int currentPage) {
-			int newPage = Builder.createNewPage(table);
+			int newPage = PageNav.createNewPage(table);
 			int midKey = splitData(table, currentPage);
-			transferValue(table, currentPage, newPage, midKey);
+			changeValues(table, currentPage, newPage, midKey);
 		}
 		
-		// split the data
+		
 		private static int splitData(RandomAccessFile table, int pageNo) {
 			int midKey = 0;
 			try {
@@ -208,12 +206,11 @@ public class TreeFunctions {
 
 		}
 		
-		// divide the pages
 		private static void splitPage(RandomAccessFile table, int parent) {
 
-			int newPage = Builder.createPage(table);
+			int newPage = PageNav.createPage(table);
 			int midKey = splitData(table, parent - 1);
-			Builder.writePage(table, parent, newPage, midKey);
+			PageNav.writeToPage(table, parent, newPage, midKey);
 
 			try {
 				table.seek((parent - 1) * PAGESIZE + 4);
